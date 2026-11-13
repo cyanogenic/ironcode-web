@@ -112,13 +112,14 @@ function homePage() {
 
 function bookingPage() {
   const home = state.bookingMode === '上门维修';
+  const earliestDate = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
   return `<div class="page-head"><div><div class="eyebrow">Book a repair</div><h1>预约维修</h1><p>约 2 分钟完成，提交后可随时修改或取消。</p></div></div>
   <div class="split-layout"><form class="card" id="booking-form"><div class="form-grid">
     <div class="field full"><label>服务方式</label><div class="choice-grid"><button type="button" class="choice ${home?'active':''}" data-booking-mode="上门维修"><strong>⌂ 上门维修</strong><span>工程师按预约时间到达</span></button><button type="button" class="choice ${!home?'active':''}" data-booking-mode="到店检测"><strong>⌖ 到店检测</strong><span>复杂故障可使用专业设备</span></button></div></div>
     <div class="field"><label for="deviceType">设备类型</label><select class="select" id="deviceType" name="deviceType" required><option value="">请选择</option><option>笔记本电脑</option><option>台式电脑</option><option>手机</option><option>平板电脑</option><option>游戏机 / 掌机</option><option>其他数码设备</option></select></div>
     <div class="field"><label for="deviceModel">品牌与型号</label><input class="input" id="deviceModel" name="deviceModel" placeholder="如：iPhone 15 Pro" required /></div>
     <div class="field full"><label for="problem">故障现象</label><textarea class="textarea" id="problem" name="problem" placeholder="请描述什么时候发生、有什么提示、是否进水或摔落……" required></textarea></div>
-    <div class="field"><label for="date">预约日期</label><input class="input" id="date" name="date" type="date" min="2026-11-14" required /></div>
+    <div class="field"><label for="date">预约日期</label><input class="input" id="date" name="date" type="date" min="${earliestDate}" required /></div>
     <div class="field"><label for="slot">时间段</label><select class="select" id="slot" name="slot" required><option value="">请选择</option><option>09:00–11:00</option><option>11:00–13:00</option><option>14:00–16:00</option><option>16:00–18:00</option><option>19:00–21:00</option></select></div>
     ${home?'<div class="field full"><label for="address">上门地址</label><input class="input" id="address" name="address" placeholder="小区 / 写字楼、楼栋门牌" required /></div>':'<div class="field full"><label>到店地址</label><div class="report">铁码数码维修 · 城中店<br><small>示例地址：科技路 88 号一层（营业时间 09:00–21:00）</small></div></div>'}
     <div class="field"><label for="name">联系人</label><input class="input" id="name" name="name" placeholder="怎么称呼您" required /></div>
