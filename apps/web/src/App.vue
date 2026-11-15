@@ -14,25 +14,39 @@ import {
   decideQuote,
   closeTicket,
   createTicket,
+  getCustomerLoginMethods,
   listOrders,
   listTickets,
   logout,
   refreshSession,
+  removeIdentity,
   replyTicket,
-  requestCode,
-  verifyCode,
+  requestEmailCode,
+  requestIdentityCode,
+  requestPhoneCode,
+  verifyEmailCode,
+  verifyIdentityCode,
+  verifyPhoneCode,
+  type CustomerLoginMethod,
 } from "./api";
 
 const phone = ref("");
+const email = ref("");
 const code = ref("");
-const step = ref<"phone" | "code">("phone");
+const loginMethod = ref<CustomerLoginMethod>("phone");
+const loginMethods = ref({ phone: true, email: false });
+const step = ref<"identifier" | "code">("identifier");
 const user = ref<AuthUser | null>(null);
 const orders = ref<RepairOrder[]>([]);
 const tickets = ref<SupportTicket[]>([]);
-const view = ref<"orders" | "booking" | "support">("orders");
+const view = ref<"orders" | "booking" | "support" | "account">("orders");
 const loading = ref(true);
 const submitting = ref(false);
 const error = ref("");
+const bindingMethod = ref<CustomerLoginMethod>("email");
+const bindingIdentifier = ref("");
+const bindingCode = ref("");
+const bindingStep = ref<"identifier" | "code">("identifier");
 const ticketForm = reactive({ subject: "", body: "", orderId: "" });
 const replyDrafts = reactive<Record<string, string>>({});
 const booking = reactive({
@@ -74,7 +88,16 @@ const statusNames: Record<RepairOrderStatus, string> = {
 
 onMounted(async () => {
   try {
+    loginMethods.value = await getCustomerLoginMethods();
+    if (!loginMethods.value.phone && loginMethods.value.email) {
+      loginMethod.value = "email";
+    }
+  } catch {
+    /* Older API deployments support phone login only. */
+  }
+  try {
     user.value = (await refreshSession()).user;
+    syncBindingMethod();
     await Promise.all([loadOrders(), loadTickets()]);
   } catch {
     /* Signed out is normal. */
@@ -92,7 +115,11 @@ async function sendCode() {
   error.value = "";
   submitting.value = true;
   try {
-    await requestCode(phone.value);
+    if (loginMethod.value === "phone") {
+      await requestPhoneCode(phone.value);
+    } else {
+      await requestEmailCode(email.value);
+    }
     step.value = "code";
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : "验证码发送失败";
@@ -104,7 +131,12 @@ async function signIn() {
   error.value = "";
   submitting.value = true;
   try {
-    user.value = (await verifyCode(phone.value, code.value)).user;
+    user.value = (
+      loginMethod.value === "phone"
+        ? await verifyPhoneCode(phone.value, code.value)
+        : await verifyEmailCode(email.value, code.value)
+    ).user;
+    syncBindingMethod();
     await Promise.all([loadOrders(), loadTickets()]);
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : "登录失败";
@@ -118,7 +150,80 @@ async function signOut() {
   orders.value = [];
   tickets.value = [];
   code.value = "";
-  step.value = "phone";
+  step.value = "identifier";
+  view.value = "orders";
+  bindingIdentifier.value = "";
+  bindingCode.value = "";
+  bindingStep.value = "identifier";
+}
+
+function syncBindingMethod() {
+  if (!user.value) return;
+  if (!user.value.phone && loginMethods.value.phone) {
+    bindingMethod.value = "phone";
+  } else if (!user.value.email && loginMethods.value.email) {
+    bindingMethod.value = "email";
+  }
+}
+
+function selectLoginMethod(method: CustomerLoginMethod) {
+  loginMethod.value = method;
+  step.value = "identifier";
+  code.value = "";
+  error.value = "";
+}
+
+function startBinding(method: CustomerLoginMethod) {
+  bindingMethod.value = method;
+  bindingIdentifier.value = "";
+  bindingCode.value = "";
+  bindingStep.value = "identifier";
+  error.value = "";
+}
+
+async function sendBindingCode() {
+  error.value = "";
+  submitting.value = true;
+  try {
+    await requestIdentityCode(bindingMethod.value, bindingIdentifier.value);
+    bindingStep.value = "code";
+  } catch (cause) {
+    error.value = cause instanceof Error ? cause.message : "验证码发送失败";
+  } finally {
+    submitting.value = false;
+  }
+}
+
+async function confirmBinding() {
+  error.value = "";
+  submitting.value = true;
+  try {
+    user.value = (
+      await verifyIdentityCode(
+        bindingMethod.value,
+        bindingIdentifier.value,
+        bindingCode.value,
+      )
+    ).user;
+    bindingIdentifier.value = "";
+    bindingCode.value = "";
+    bindingStep.value = "identifier";
+  } catch (cause) {
+    error.value = cause instanceof Error ? cause.message : "绑定失败";
+  } finally {
+    submitting.value = false;
+  }
+}
+
+async function unbindIdentity(method: CustomerLoginMethod) {
+  const label = method === "phone" ? "手机号" : "邮箱";
+  if (!window.confirm(`确认解除${label}绑定？`)) return;
+  error.value = "";
+  try {
+    user.value = (await removeIdentity(method)).user;
+  } catch (cause) {
+    error.value = cause instanceof Error ? cause.message : "解绑失败";
+  }
 }
 
 async function submitBooking() {
@@ -270,7 +375,9 @@ function formatDate(value: string) {
                   ? "我的维修"
                   : view === "booking"
                     ? "预约维修"
-                    : "服务留言"
+                    : view === "support"
+                      ? "服务留言"
+                      : "账号与登录"
               }}
             </h2>
           </div>
@@ -278,6 +385,7 @@ function formatDate(value: string) {
             <button class="text-button" @click="view = 'orders'">订单</button>
             <button class="text-button" @click="view = 'booking'">预约</button>
             <button class="text-button" @click="view = 'support'">留言</button>
+            <button class="text-button" @click="view = 'account'">账号</button>
             <button class="text-button muted-button" @click="signOut">
               退出
             </button>
@@ -455,7 +563,7 @@ function formatDate(value: string) {
             {{ submitting ? "正在提交…" : "提交预约" }}
           </button>
         </form>
-        <section v-else class="support-view">
+        <section v-else-if="view === 'support'" class="support-view">
           <form class="ticket-form" @submit.prevent="submitTicket">
             <h3>新建留言</h3>
             <div class="form-grid">
@@ -530,16 +638,136 @@ function formatDate(value: string) {
             </article>
           </div>
         </section>
+        <section v-else class="account-view">
+          <div class="identity-list">
+            <article class="identity-card">
+              <div>
+                <small>手机号</small>
+                <strong>{{ user.phone || "未绑定" }}</strong>
+              </div>
+              <button
+                v-if="user.phone"
+                class="text-button"
+                :disabled="!user.email"
+                @click="unbindIdentity('phone')"
+              >
+                解绑
+              </button>
+              <button
+                v-else-if="loginMethods.phone"
+                class="text-button"
+                @click="startBinding('phone')"
+              >
+                绑定
+              </button>
+            </article>
+            <article class="identity-card">
+              <div>
+                <small>邮箱</small>
+                <strong>{{ user.email || "未绑定" }}</strong>
+              </div>
+              <button
+                v-if="user.email"
+                class="text-button"
+                :disabled="!user.phone"
+                @click="unbindIdentity('email')"
+              >
+                解绑
+              </button>
+              <button
+                v-else-if="loginMethods.email"
+                class="text-button"
+                @click="startBinding('email')"
+              >
+                绑定
+              </button>
+            </article>
+          </div>
+          <p class="muted identity-note">
+            至少保留一种登录方式。已属于其他账号的手机号或邮箱不能绑定。
+          </p>
+          <form
+            v-if="
+              (bindingMethod === 'phone' &&
+                !user.phone &&
+                loginMethods.phone) ||
+              (bindingMethod === 'email' && !user.email && loginMethods.email)
+            "
+            class="identity-form"
+            @submit.prevent="
+              bindingStep === 'identifier'
+                ? sendBindingCode()
+                : confirmBinding()
+            "
+          >
+            <h3>绑定{{ bindingMethod === "phone" ? "手机号" : "邮箱" }}</h3>
+            <label
+              >{{ bindingMethod === "phone" ? "手机号" : "邮箱"
+              }}<input
+                v-model.trim="bindingIdentifier"
+                :type="bindingMethod === 'email' ? 'email' : 'tel'"
+                :inputmode="bindingMethod === 'email' ? 'email' : 'tel'"
+                :maxlength="bindingMethod === 'email' ? 254 : 11"
+                :autocomplete="bindingMethod === 'email' ? 'email' : 'tel'"
+                :disabled="bindingStep === 'code'"
+                required
+            /></label>
+            <label v-if="bindingStep === 'code'"
+              >验证码<input
+                v-model.trim="bindingCode"
+                inputmode="numeric"
+                maxlength="6"
+                autocomplete="one-time-code"
+                required
+            /></label>
+            <button class="button" :disabled="submitting">
+              {{
+                submitting
+                  ? "请稍候…"
+                  : bindingStep === "identifier"
+                    ? "获取验证码"
+                    : "确认绑定"
+              }}
+            </button>
+            <button
+              v-if="bindingStep === 'code'"
+              class="text-button"
+              type="button"
+              @click="
+                bindingStep = 'identifier';
+                bindingCode = '';
+              "
+            >
+              更换{{ bindingMethod === "phone" ? "手机号" : "邮箱" }}
+            </button>
+          </form>
+        </section>
       </div>
       <form
         v-else
         class="auth-card"
-        @submit.prevent="step === 'phone' ? sendCode() : signIn()"
+        @submit.prevent="step === 'identifier' ? sendCode() : signIn()"
       >
         <p class="eyebrow">CUSTOMER SIGN IN</p>
-        <h2>手机号登录</h2>
+        <div v-if="loginMethods.phone && loginMethods.email" class="login-tabs">
+          <button
+            type="button"
+            :class="{ active: loginMethod === 'phone' }"
+            @click="selectLoginMethod('phone')"
+          >
+            手机号
+          </button>
+          <button
+            type="button"
+            :class="{ active: loginMethod === 'email' }"
+            @click="selectLoginMethod('email')"
+          >
+            邮箱
+          </button>
+        </div>
+        <h2>{{ loginMethod === "phone" ? "手机号登录" : "邮箱登录" }}</h2>
         <p class="muted">登录后可预约维修、确认报价并查看服务进度。</p>
-        <label
+        <label v-if="loginMethod === 'phone'"
           >手机号<input
             v-model.trim="phone"
             inputmode="tel"
@@ -548,6 +776,20 @@ function formatDate(value: string) {
             :disabled="step === 'code'"
             required
         /></label>
+        <label v-else
+          >邮箱<input
+            v-model.trim="email"
+            type="email"
+            inputmode="email"
+            maxlength="254"
+            autocomplete="email"
+            placeholder="name@example.com"
+            :disabled="step === 'code'"
+            required
+        /></label>
+        <p v-if="loginMethod === 'email' && step === 'identifier'" class="hint">
+          如果你以前使用手机号登录，请先进入原账号绑定邮箱，避免创建两个账号。
+        </p>
         <label v-if="step === 'code'"
           >验证码<input
             v-model.trim="code"
@@ -560,7 +802,11 @@ function formatDate(value: string) {
         <p v-if="error" class="error" role="alert">{{ error }}</p>
         <button class="button" :disabled="submitting">
           {{
-            submitting ? "请稍候…" : step === "phone" ? "获取验证码" : "登录"
+            submitting
+              ? "请稍候…"
+              : step === "identifier"
+                ? "获取验证码"
+                : "登录"
           }}
         </button>
         <button
@@ -568,12 +814,12 @@ function formatDate(value: string) {
           class="text-button"
           type="button"
           @click="
-            step = 'phone';
+            step = 'identifier';
             code = '';
             error = '';
           "
         >
-          更换手机号</button
+          更换{{ loginMethod === "phone" ? "手机号" : "邮箱" }}</button
         ><small>继续即表示你同意维修服务条款与隐私说明。</small>
       </form>
     </section>

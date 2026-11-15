@@ -3,6 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import { JwtModule } from "@nestjs/jwt";
 import { PassportModule } from "@nestjs/passport";
 import type { Environment } from "../config/environment";
+import { EmailModule } from "../email/email.module";
 import { SmsModule } from "../sms/sms.module";
 import { AuthSessionService } from "./auth-session.service";
 import { CustomerAuthController } from "./customer-auth.controller";
@@ -18,6 +19,7 @@ import { StaffAuthService } from "./staff-auth.service";
   imports: [
     PassportModule,
     SmsModule,
+    EmailModule,
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService<Environment, true>) => ({

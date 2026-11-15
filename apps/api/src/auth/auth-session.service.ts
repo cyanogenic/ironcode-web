@@ -102,6 +102,7 @@ export class AuthSessionService {
         id: user.id,
         role: user.role,
         phone: user.phone,
+        email: user.email,
         username: user.username,
         displayName: user.displayName,
       },

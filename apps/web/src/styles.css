@@ -398,6 +398,77 @@ input:focus {
   cursor: pointer;
   font-weight: 750;
 }
+.text-button:disabled {
+  color: #a6aaa7;
+  cursor: not-allowed;
+}
+.login-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin: 10px 0 24px;
+  padding: 5px;
+  border-radius: 14px;
+  background: #efeee8;
+}
+.login-tabs button {
+  border: 0;
+  border-radius: 10px;
+  padding: 10px;
+  background: transparent;
+  color: #66716b;
+  cursor: pointer;
+  font-weight: 800;
+}
+.login-tabs button.active {
+  background: #fffdf8;
+  color: #1e6b50;
+  box-shadow: 0 2px 8px rgba(23, 44, 35, 0.08);
+}
+.hint {
+  margin: 12px 0 0;
+  color: #7b6941;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.account-view,
+.identity-list {
+  display: grid;
+  gap: 14px;
+}
+.identity-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 18px;
+  border: 1px solid #e1dfd7;
+  border-radius: 16px;
+  background: #fbfaf6;
+}
+.identity-card div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+.identity-card strong {
+  overflow-wrap: anywhere;
+}
+.identity-card .text-button {
+  padding: 0;
+}
+.identity-note {
+  margin: 0;
+  font-size: 12px;
+}
+.identity-form {
+  margin-top: 10px;
+  padding-top: 22px;
+  border-top: 1px solid #e1dfd7;
+}
+.identity-form h3 {
+  margin: 0;
+}
 .error {
   padding: 10px 12px;
   border-radius: 10px;

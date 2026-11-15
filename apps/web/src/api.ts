@@ -1,12 +1,15 @@
 import type {
   ApiErrorBody,
   AuthResponse,
+  AuthUser,
   CreateOrderInput,
   RepairOrder,
   SupportTicket,
 } from "@ironcode/contracts";
 
 let accessToken: string | null = null;
+
+export type CustomerLoginMethod = "phone" | "email";
 
 async function parse<T>(response: Response): Promise<T> {
   if (response.ok)
@@ -18,7 +21,13 @@ async function parse<T>(response: Response): Promise<T> {
   throw new Error(message || "请求失败，请稍后重试");
 }
 
-export async function requestCode(phone: string) {
+export async function getCustomerLoginMethods() {
+  return parse<{ phone: boolean; email: boolean }>(
+    await fetch("/api/auth/customer/methods"),
+  );
+}
+
+export async function requestPhoneCode(phone: string) {
   return parse<{ accepted: boolean }>(
     await fetch("/api/auth/customer/request-code", {
       method: "POST",
@@ -28,13 +37,36 @@ export async function requestCode(phone: string) {
   );
 }
 
-export async function verifyCode(phone: string, code: string) {
+export async function verifyPhoneCode(phone: string, code: string) {
   const result = await parse<AuthResponse>(
     await fetch("/api/auth/customer/verify-code", {
       method: "POST",
       headers: { "content-type": "application/json" },
       credentials: "include",
       body: JSON.stringify({ phone, code }),
+    }),
+  );
+  accessToken = result.accessToken;
+  return result;
+}
+
+export async function requestEmailCode(email: string) {
+  return parse<{ accepted: boolean }>(
+    await fetch("/api/auth/customer/email/request-code", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email }),
+    }),
+  );
+}
+
+export async function verifyEmailCode(email: string, code: string) {
+  const result = await parse<AuthResponse>(
+    await fetch("/api/auth/customer/email/verify-code", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ email, code }),
     }),
   );
   accessToken = result.accessToken;
@@ -80,6 +112,48 @@ async function authenticatedFetch<T>(path: string, init: RequestInit = {}) {
     });
   }
   return parse<T>(response);
+}
+
+export function requestIdentityCode(
+  method: CustomerLoginMethod,
+  identifier: string,
+) {
+  return authenticatedFetch<{ accepted: boolean }>(
+    `/api/auth/customer/identity/${method}/request-code`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(
+        method === "phone" ? { phone: identifier } : { email: identifier },
+      ),
+    },
+  );
+}
+
+export function verifyIdentityCode(
+  method: CustomerLoginMethod,
+  identifier: string,
+  code: string,
+) {
+  return authenticatedFetch<{ user: AuthUser }>(
+    `/api/auth/customer/identity/${method}/verify-code`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(
+        method === "phone"
+          ? { phone: identifier, code }
+          : { email: identifier, code },
+      ),
+    },
+  );
+}
+
+export function removeIdentity(method: CustomerLoginMethod) {
+  return authenticatedFetch<{ user: AuthUser }>(
+    `/api/auth/customer/identity/${method}`,
+    { method: "DELETE" },
+  );
 }
 
 export function listOrders() {

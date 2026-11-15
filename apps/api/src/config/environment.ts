@@ -1,5 +1,9 @@
 import { z } from "zod";
 
+const booleanString = z
+  .enum(["true", "false"])
+  .transform((value) => value === "true");
+
 const environmentSchema = z
   .object({
     NODE_ENV: z
@@ -10,10 +14,9 @@ const environmentSchema = z
     DATABASE_URL: z.string().min(1),
     JWT_ACCESS_SECRET: z.string().min(32),
     REFRESH_TOKEN_DAYS: z.coerce.number().int().min(1).max(90).default(30),
-    COOKIE_SECURE: z
-      .enum(["true", "false"])
-      .default("false")
-      .transform((value) => value === "true"),
+    COOKIE_SECURE: booleanString.default(false),
+    CUSTOMER_PHONE_LOGIN_ENABLED: booleanString.default(true),
+    CUSTOMER_EMAIL_LOGIN_ENABLED: booleanString.default(false),
     OTP_PROVIDER: z.enum(["console", "aliyun"]).default("console"),
     OTP_PEPPER: z.string().min(32),
     ALIYUN_SMS_ACCESS_KEY_ID: z.string().optional(),
@@ -21,6 +24,14 @@ const environmentSchema = z
     ALIYUN_SMS_SIGN_NAME: z.string().optional(),
     ALIYUN_SMS_TEMPLATE_CODE: z.string().optional(),
     ALIYUN_SMS_ENDPOINT: z.string().min(1).default("dysmsapi.aliyuncs.com"),
+    EMAIL_PROVIDER: z.enum(["console", "smtp"]).default("console"),
+    SMTP_HOST: z.string().optional(),
+    SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(587),
+    SMTP_SECURE: booleanString.default(false),
+    SMTP_USERNAME: z.string().optional(),
+    SMTP_PASSWORD: z.string().optional(),
+    SMTP_FROM_NAME: z.string().min(1).default("铁码维修"),
+    SMTP_FROM_ADDRESS: z.string().email().optional().or(z.literal("")),
     R2_ACCOUNT_ID: z.string().optional(),
     R2_ACCESS_KEY_ID: z.string().optional(),
     R2_SECRET_ACCESS_KEY: z.string().optional(),
@@ -30,7 +41,18 @@ const environmentSchema = z
     SEED_ADMIN_PASSWORD: z.string().optional(),
   })
   .superRefine((value, context) => {
-    if (value.OTP_PROVIDER === "aliyun") {
+    if (
+      !value.CUSTOMER_PHONE_LOGIN_ENABLED &&
+      !value.CUSTOMER_EMAIL_LOGIN_ENABLED
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["CUSTOMER_PHONE_LOGIN_ENABLED"],
+        message: "at least one customer login method must be enabled",
+      });
+    }
+
+    if (value.CUSTOMER_PHONE_LOGIN_ENABLED && value.OTP_PROVIDER === "aliyun") {
       for (const key of [
         "ALIYUN_SMS_ACCESS_KEY_ID",
         "ALIYUN_SMS_ACCESS_KEY_SECRET",
@@ -47,6 +69,26 @@ const environmentSchema = z
       }
     }
 
+    if (value.CUSTOMER_EMAIL_LOGIN_ENABLED && value.EMAIL_PROVIDER === "smtp") {
+      for (const key of ["SMTP_HOST", "SMTP_FROM_ADDRESS"] as const) {
+        if (!value[key]) {
+          context.addIssue({
+            code: "custom",
+            path: [key],
+            message: `${key} is required when email login uses SMTP`,
+          });
+        }
+      }
+      if (Boolean(value.SMTP_USERNAME) !== Boolean(value.SMTP_PASSWORD)) {
+        context.addIssue({
+          code: "custom",
+          path: [value.SMTP_USERNAME ? "SMTP_PASSWORD" : "SMTP_USERNAME"],
+          message:
+            "SMTP_USERNAME and SMTP_PASSWORD must be configured together",
+        });
+      }
+    }
+
     if (value.NODE_ENV !== "production") return;
 
     if (!value.COOKIE_SECURE) {
@@ -57,11 +99,25 @@ const environmentSchema = z
       });
     }
 
-    if (value.OTP_PROVIDER === "console") {
+    if (
+      value.CUSTOMER_PHONE_LOGIN_ENABLED &&
+      value.OTP_PROVIDER === "console"
+    ) {
       context.addIssue({
         code: "custom",
         path: ["OTP_PROVIDER"],
         message: "console OTP is forbidden in production",
+      });
+    }
+
+    if (
+      value.CUSTOMER_EMAIL_LOGIN_ENABLED &&
+      value.EMAIL_PROVIDER === "console"
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["EMAIL_PROVIDER"],
+        message: "console email is forbidden in production",
       });
     }
 

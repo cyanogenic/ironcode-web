@@ -9,6 +9,8 @@ const customer = {
   role: UserRole.CUSTOMER,
   status: UserStatus.ACTIVE,
   phone: "13800138000",
+  email: null,
+  emailVerifiedAt: null,
   username: null,
   passwordHash: null,
   displayName: null,
