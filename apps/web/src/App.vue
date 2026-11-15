@@ -367,7 +367,7 @@ function formatDate(value: string) {
       <div v-if="loading" class="auth-card"><p>正在检查登录状态…</p></div>
       <div v-else-if="user" class="auth-card dashboard">
         <header class="dashboard-head">
-          <div>
+          <div class="dashboard-title">
             <p class="eyebrow">CUSTOMER SERVICE</p>
             <h2>
               {{
@@ -381,12 +381,45 @@ function formatDate(value: string) {
               }}
             </h2>
           </div>
-          <div class="head-actions">
-            <button class="text-button" @click="view = 'orders'">订单</button>
-            <button class="text-button" @click="view = 'booking'">预约</button>
-            <button class="text-button" @click="view = 'support'">留言</button>
-            <button class="text-button" @click="view = 'account'">账号</button>
-            <button class="text-button muted-button" @click="signOut">
+          <div class="dashboard-controls">
+            <nav class="head-actions" aria-label="客户服务导航">
+              <button
+                class="text-button"
+                :class="{ active: view === 'orders' }"
+                :aria-current="view === 'orders' ? 'page' : undefined"
+                @click="view = 'orders'"
+              >
+                订单
+              </button>
+              <button
+                class="text-button"
+                :class="{ active: view === 'booking' }"
+                :aria-current="view === 'booking' ? 'page' : undefined"
+                @click="view = 'booking'"
+              >
+                预约
+              </button>
+              <button
+                class="text-button"
+                :class="{ active: view === 'support' }"
+                :aria-current="view === 'support' ? 'page' : undefined"
+                @click="view = 'support'"
+              >
+                留言
+              </button>
+              <button
+                class="text-button"
+                :class="{ active: view === 'account' }"
+                :aria-current="view === 'account' ? 'page' : undefined"
+                @click="view = 'account'"
+              >
+                账号
+              </button>
+            </nav>
+            <button
+              class="text-button muted-button logout-button"
+              @click="signOut"
+            >
               退出
             </button>
           </div>
@@ -394,11 +427,11 @@ function formatDate(value: string) {
         <p v-if="error" class="error" role="alert">{{ error }}</p>
         <div v-if="view === 'orders'" class="order-list">
           <div v-if="!orders.length" class="empty">
-            还没有维修订单。<button
-              class="text-button"
-              @click="view = 'booking'"
-            >
-              现在预约
+            <div class="empty-icon" aria-hidden="true">修</div>
+            <h3>还没有维修订单</h3>
+            <p>预约后，可在这里查看检测、报价和维修进度。</p>
+            <button class="empty-action" @click="view = 'booking'">
+              立即预约
             </button>
           </div>
           <article v-for="order in orders" :key="order.id" class="order-card">
