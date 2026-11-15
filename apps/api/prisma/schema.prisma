@@ -1,0 +1,427 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  CUSTOMER
+  ENGINEER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum ServiceMode {
+  ONSITE
+  IN_STORE
+}
+
+enum RepairOrderStatus {
+  APPOINTMENT_PENDING
+  APPOINTMENT_CONFIRMED
+  RECEIVED
+  DIAGNOSING
+  QUOTE_PENDING_CUSTOMER
+  QUOTE_REJECTED
+  WAITING_REPAIR
+  REPAIRING
+  TESTING
+  READY_FOR_DELIVERY
+  COMPLETED
+  CANCELED
+  WARRANTY_RETURN
+}
+
+enum QuoteStatus {
+  DRAFT
+  PENDING_CUSTOMER
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  SUPERSEDED
+}
+
+enum PaymentProvider {
+  IN_STORE
+  WECHAT_PAY
+  ALIPAY
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUND_PENDING
+  REFUNDED
+  CANCELED
+}
+
+enum AttachmentKind {
+  CUSTOMER_FAULT_PHOTO
+  INSPECTION_PHOTO
+  DELIVERY_PROOF
+  WARRANTY_DOCUMENT
+  OTHER
+}
+
+enum UploadStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  DELETED
+}
+
+enum ConsentType {
+  SERVICE_TERMS
+  PRIVACY_POLICY
+  DEVICE_DISASSEMBLY
+  DATA_ACCESS
+  SYSTEM_REINSTALL
+  ADDITIONAL_REPAIR
+}
+
+enum TicketStatus {
+  OPEN
+  WAITING_CUSTOMER
+  WAITING_STAFF
+  RESOLVED
+  CLOSED
+}
+
+model User {
+  id                       String               @id @default(cuid())
+  role                     UserRole
+  status                   UserStatus           @default(ACTIVE)
+  phone                    String?              @unique @db.VarChar(32)
+  username                 String?              @unique @db.VarChar(64)
+  passwordHash             String?
+  displayName              String?              @db.VarChar(80)
+  lastLoginAt              DateTime?            @db.Timestamptz(3)
+  createdAt                DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt                DateTime             @updatedAt @db.Timestamptz(3)
+  sessions                 Session[]
+  storeMemberships         StoreMember[]
+  addresses                Address[]
+  devices                  Device[]
+  customerOrders           RepairOrder[]        @relation("CustomerOrders")
+  assignedOrders           RepairOrder[]        @relation("AssignedEngineer")
+  orderStatusChanges       OrderStatusHistory[]  @relation("OrderStatusActor")
+  inspectionReports        InspectionReport[]    @relation("InspectionEngineer")
+  authoredQuotes           Quote[]               @relation("QuoteAuthor")
+  uploadedAttachments      Attachment[]          @relation("AttachmentUploader")
+  grantedConsents          Consent[]             @relation("ConsentGrantor")
+  ticketMessages           TicketMessage[]       @relation("TicketMessageAuthor")
+  createdTickets           SupportTicket[]       @relation("TicketCreator")
+  auditLogs                AuditLog[]            @relation("AuditActor")
+}
+
+model Session {
+  id               String    @id @default(cuid())
+  userId           String
+  refreshTokenHash String    @unique @db.VarChar(64)
+  userAgent        String?   @db.VarChar(500)
+  ipAddress        String?   @db.VarChar(64)
+  expiresAt        DateTime  @db.Timestamptz(3)
+  revokedAt        DateTime? @db.Timestamptz(3)
+  createdAt        DateTime  @default(now()) @db.Timestamptz(3)
+  lastUsedAt       DateTime  @default(now()) @db.Timestamptz(3)
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+model OtpChallenge {
+  id          String    @id @default(cuid())
+  phone       String    @db.VarChar(32)
+  purpose     String    @db.VarChar(40)
+  codeHash    String    @db.VarChar(64)
+  attempts    Int       @default(0)
+  expiresAt   DateTime  @db.Timestamptz(3)
+  consumedAt  DateTime? @db.Timestamptz(3)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+
+  @@index([phone, purpose, createdAt])
+}
+
+model Store {
+  id          String        @id @default(cuid())
+  code        String        @unique @db.VarChar(32)
+  name        String        @db.VarChar(120)
+  timezone    String        @default("Asia/Shanghai") @db.VarChar(64)
+  address     String?       @db.VarChar(300)
+  phone       String?       @db.VarChar(32)
+  active      Boolean       @default(true)
+  createdAt   DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime      @updatedAt @db.Timestamptz(3)
+  members     StoreMember[]
+  orders      RepairOrder[]
+}
+
+model StoreMember {
+  id        String   @id @default(cuid())
+  storeId   String
+  userId    String
+  title     String?  @db.VarChar(80)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, userId])
+  @@index([userId, active])
+}
+
+model Address {
+  id         String        @id @default(cuid())
+  userId     String
+  label      String?       @db.VarChar(50)
+  recipient  String        @db.VarChar(80)
+  phone      String        @db.VarChar(32)
+  province   String        @db.VarChar(80)
+  city       String        @db.VarChar(80)
+  district   String        @db.VarChar(80)
+  detail     String        @db.VarChar(300)
+  longitude  Decimal?      @db.Decimal(10, 7)
+  latitude   Decimal?      @db.Decimal(10, 7)
+  createdAt  DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime      @updatedAt @db.Timestamptz(3)
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders     RepairOrder[]
+
+  @@index([userId])
+}
+
+model Device {
+  id         String        @id @default(cuid())
+  userId     String
+  category   String        @db.VarChar(80)
+  brand      String?       @db.VarChar(80)
+  model      String        @db.VarChar(120)
+  serialNo   String?       @db.VarChar(120)
+  notes      String?       @db.VarChar(500)
+  createdAt  DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime      @updatedAt @db.Timestamptz(3)
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders     RepairOrder[]
+
+  @@index([userId])
+}
+
+model RepairOrder {
+  id                     String                  @id @default(cuid())
+  orderNo                String                  @unique @db.VarChar(32)
+  customerId             String
+  storeId                String
+  assignedEngineerId     String?
+  addressId              String?
+  deviceId               String?
+  serviceMode            ServiceMode
+  status                 RepairOrderStatus       @default(APPOINTMENT_PENDING)
+  problemDescription     String                  @db.VarChar(2000)
+  scheduledStart         DateTime                @db.Timestamptz(3)
+  scheduledEnd           DateTime                @db.Timestamptz(3)
+  version                Int                     @default(1)
+  canceledAt             DateTime?               @db.Timestamptz(3)
+  completedAt            DateTime?               @db.Timestamptz(3)
+  createdAt              DateTime                @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime                @updatedAt @db.Timestamptz(3)
+  customer               User                    @relation("CustomerOrders", fields: [customerId], references: [id])
+  store                  Store                   @relation(fields: [storeId], references: [id])
+  assignedEngineer       User?                   @relation("AssignedEngineer", fields: [assignedEngineerId], references: [id])
+  address                Address?                @relation(fields: [addressId], references: [id])
+  device                 Device?                 @relation(fields: [deviceId], references: [id])
+  statusHistory          OrderStatusHistory[]
+  inspections            InspectionReport[]
+  quotes                 Quote[]
+  attachments            Attachment[]
+  payments               Payment[]
+  warranty               Warranty?
+  consents               Consent[]
+  tickets                SupportTicket[]
+
+  @@index([customerId, createdAt])
+  @@index([storeId, status, scheduledStart])
+  @@index([assignedEngineerId, status])
+}
+
+model OrderStatusHistory {
+  id          String             @id @default(cuid())
+  orderId     String
+  fromStatus  RepairOrderStatus?
+  toStatus    RepairOrderStatus
+  actorId     String?
+  reason      String?            @db.VarChar(500)
+  createdAt   DateTime           @default(now()) @db.Timestamptz(3)
+  order       RepairOrder        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  actor       User?              @relation("OrderStatusActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([orderId, createdAt])
+}
+
+model InspectionReport {
+  id          String       @id @default(cuid())
+  orderId     String
+  engineerId  String
+  revision    Int          @default(1)
+  cause       String       @db.VarChar(3000)
+  solution    String       @db.VarChar(3000)
+  notes       String?      @db.VarChar(3000)
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime     @updatedAt @db.Timestamptz(3)
+  order       RepairOrder  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  engineer    User         @relation("InspectionEngineer", fields: [engineerId], references: [id])
+  attachments Attachment[]
+
+  @@unique([orderId, revision])
+  @@index([engineerId, createdAt])
+}
+
+model Quote {
+  id          String       @id @default(cuid())
+  orderId     String
+  createdById String
+  revision    Int          @default(1)
+  status      QuoteStatus  @default(DRAFT)
+  subtotal    Decimal      @db.Decimal(12, 2)
+  total       Decimal      @db.Decimal(12, 2)
+  expiresAt   DateTime?    @db.Timestamptz(3)
+  respondedAt DateTime?    @db.Timestamptz(3)
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime     @updatedAt @db.Timestamptz(3)
+  order       RepairOrder  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  createdBy   User         @relation("QuoteAuthor", fields: [createdById], references: [id])
+  items       QuoteItem[]
+
+  @@unique([orderId, revision])
+  @@index([orderId, status])
+}
+
+model QuoteItem {
+  id          String   @id @default(cuid())
+  quoteId     String
+  name        String   @db.VarChar(200)
+  description String?  @db.VarChar(1000)
+  quantity    Int      @default(1)
+  unitPrice   Decimal  @db.Decimal(12, 2)
+  total       Decimal  @db.Decimal(12, 2)
+  quote       Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  @@index([quoteId])
+}
+
+model Attachment {
+  id             String            @id @default(cuid())
+  orderId        String
+  inspectionId   String?
+  uploadedById   String
+  kind           AttachmentKind
+  uploadStatus   UploadStatus      @default(PENDING)
+  objectKey      String            @unique @db.VarChar(700)
+  originalName   String            @db.VarChar(255)
+  contentType    String            @db.VarChar(120)
+  expectedSize   BigInt?
+  verifiedSize   BigInt?
+  checksum       String?           @db.VarChar(128)
+  createdAt      DateTime          @default(now()) @db.Timestamptz(3)
+  verifiedAt     DateTime?         @db.Timestamptz(3)
+  deletedAt      DateTime?         @db.Timestamptz(3)
+  order          RepairOrder       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  inspection     InspectionReport? @relation(fields: [inspectionId], references: [id], onDelete: SetNull)
+  uploadedBy     User              @relation("AttachmentUploader", fields: [uploadedById], references: [id])
+
+  @@index([orderId, kind])
+  @@index([uploadStatus, createdAt])
+}
+
+model Payment {
+  id                String          @id @default(cuid())
+  orderId           String
+  provider          PaymentProvider
+  status            PaymentStatus   @default(PENDING)
+  amount            Decimal         @db.Decimal(12, 2)
+  merchantPaymentNo String          @unique @db.VarChar(80)
+  providerPaymentNo String?         @unique @db.VarChar(120)
+  paidAt            DateTime?       @db.Timestamptz(3)
+  refundedAt        DateTime?       @db.Timestamptz(3)
+  providerPayload   Json?
+  createdAt         DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime        @updatedAt @db.Timestamptz(3)
+  order             RepairOrder     @relation(fields: [orderId], references: [id])
+
+  @@index([orderId, status])
+}
+
+model Warranty {
+  id          String      @id @default(cuid())
+  orderId     String      @unique
+  startsAt    DateTime    @db.Timestamptz(3)
+  expiresAt   DateTime    @db.Timestamptz(3)
+  terms       String      @db.VarChar(3000)
+  createdAt   DateTime    @default(now()) @db.Timestamptz(3)
+  order       RepairOrder @relation(fields: [orderId], references: [id])
+}
+
+model Consent {
+  id           String      @id @default(cuid())
+  orderId      String
+  type         ConsentType
+  granted      Boolean
+  grantedById  String
+  policyVersion String     @db.VarChar(40)
+  ipAddress    String?     @db.VarChar(64)
+  createdAt    DateTime    @default(now()) @db.Timestamptz(3)
+  order        RepairOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  grantedBy    User        @relation("ConsentGrantor", fields: [grantedById], references: [id])
+
+  @@index([orderId, type, createdAt])
+}
+
+model SupportTicket {
+  id          String          @id @default(cuid())
+  orderId     String?
+  createdById String
+  subject     String          @db.VarChar(200)
+  status      TicketStatus    @default(OPEN)
+  createdAt   DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime        @updatedAt @db.Timestamptz(3)
+  order       RepairOrder?    @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  createdBy   User            @relation("TicketCreator", fields: [createdById], references: [id])
+  messages    TicketMessage[]
+
+  @@index([createdById, status])
+  @@index([orderId])
+}
+
+model TicketMessage {
+  id         String        @id @default(cuid())
+  ticketId   String
+  authorId   String
+  body       String        @db.VarChar(5000)
+  createdAt  DateTime      @default(now()) @db.Timestamptz(3)
+  ticket     SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author     User          @relation("TicketMessageAuthor", fields: [authorId], references: [id])
+
+  @@index([ticketId, createdAt])
+}
+
+model AuditLog {
+  id          String    @id @default(cuid())
+  actorId     String?
+  action      String    @db.VarChar(100)
+  resource    String    @db.VarChar(100)
+  resourceId  String?   @db.VarChar(100)
+  ipAddress   String?   @db.VarChar(64)
+  userAgent   String?   @db.VarChar(500)
+  metadata    Json?
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  actor       User?     @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([actorId, createdAt])
+  @@index([resource, resourceId, createdAt])
+}

@@ -1,0 +1,20 @@
+{
+  "name": "ironcode-repair-service",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.25.0",
+  "scripts": {
+    "build": "pnpm -r build",
+    "dev": "pnpm --parallel --filter @ironcode/api --filter @ironcode/web --filter @ironcode/staff dev",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "format": "prettier --write .",
+    "db:generate": "pnpm --filter @ironcode/api prisma:generate",
+    "db:migrate": "pnpm --filter @ironcode/api prisma:migrate",
+    "db:seed": "pnpm --filter @ironcode/api prisma:seed"
+  },
+  "devDependencies": {
+    "prettier": "3.6.2",
+    "typescript": "5.9.3"
+  }
+}
