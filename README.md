@@ -16,18 +16,41 @@
 
 1. 创建一个保持私有的 R2 bucket，不启用公开开发 URL。
 2. 创建仅能操作该 bucket 的 S3 API Token，把账户 ID、Access Key、Secret 和 bucket 名填入服务器环境变量。
-3. 按 `deploy/r2/cors.example.json` 配置 bucket CORS，并把示例域名替换成员工后台的实际域名。
+3. 在 R2 bucket 的 CORS 设置中填写以下配置，并把示例域名替换成员工后台的实际域名：
+
+```json
+[
+  {
+    "AllowedOrigins": ["https://staff.example.com", "http://localhost:5174"],
+    "AllowedMethods": ["PUT"],
+    "AllowedHeaders": ["Content-Type"],
+    "ExposeHeaders": ["ETag"],
+    "MaxAgeSeconds": 3600
+  }
+]
+```
+
+该配置允许员工后台使用 API 签发的临时 URL，跨域向私有 R2 bucket 上传文件；它不替代 R2 的私有权限和签名 URL 校验。
 4. API 只签发 5 分钟有效的 PUT/GET URL。上传后必须调用完成接口，API 会通过 HEAD 校验 MIME 和文件大小；校验失败的对象会立即删除。
 
 客户故障照片、检测照片、交付凭证与质保文件均使用不可预测的对象键，数据库负责记录对象归属。前端从不保存 R2 凭据，也不会直接拼接对象 URL。
 
-## 本地开发
+## 生产部署
 
-1. 复制 `.env.example` 为 `.env`，替换所有示例密钥。
-2. 启动 PostgreSQL：`docker compose -f deploy/compose/development.yml up -d`。
-3. 安装依赖：`pnpm install`。
-4. 生成 Prisma 客户端并迁移数据库：`pnpm db:generate && pnpm db:migrate`。
-5. 启动开发服务：`pnpm dev`。
+项目只保留生产环境 Compose 配置。复制 `.env.example` 为 `.env`，填写生产密钥、数据库密码、客户域名、员工后台域名和 `APP_ORIGINS`，然后执行：
+
+```bash
+docker compose -f compose.yml pull
+docker compose -f compose.yml up -d
+```
+
+首次部署或数据库结构更新后，在应用镜像中执行迁移：
+
+```bash
+docker compose -f compose.yml run --rm app sh -c 'cd /opt/ironcode/apps/api && /opt/ironcode/node_modules/.bin/prisma migrate deploy'
+```
+
+GitHub Actions 会在 `main` 分支或版本标签推送后构建并发布 `ghcr.io/<owner>/ironcode-web` 镜像。应用容器内由 Nginx 提供客户网站和员工后台，并将 `/api` 反向代理到 NestJS API。
 
 开发环境的 `OTP_PROVIDER=console` 会把短信验证码写入 API 日志；生产环境会拒绝为已启用的手机号登录使用该提供器。客户手机号和邮箱登录可以分别开关，但至少要启用一种：
 
