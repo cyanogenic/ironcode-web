@@ -14,7 +14,6 @@ services:
       DATABASE_URL: postgresql://ironcode:${POSTGRES_PASSWORD}@postgres:5432/ironcode?schema=public
       APP_ORIGINS: ${APP_ORIGINS:?Set APP_ORIGINS in .env}
       CUSTOMER_HOST: ${CUSTOMER_HOST:?Set CUSTOMER_HOST in .env}
-      STAFF_HOST: ${STAFF_HOST:?Set STAFF_HOST in .env}
     depends_on:
       postgres:
         condition: service_healthy

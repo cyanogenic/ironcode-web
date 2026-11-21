@@ -31,7 +31,7 @@ ENV API_PORT=3000
 RUN apt-get update \
   && apt-get install --no-install-recommends -y nginx gettext-base openssl \
   && rm -rf /var/lib/apt/lists/* \
-  && mkdir -p /opt/ironcode/web /opt/ironcode/staff
+  && mkdir -p /opt/ironcode/web
 
 WORKDIR /opt/ironcode
 
@@ -42,7 +42,7 @@ COPY --from=build /workspace/apps/api/prisma ./apps/api/prisma
 COPY --from=build /workspace/apps/api/prisma.config.ts ./apps/api/prisma.config.ts
 COPY --from=build /workspace/apps/api/package.json ./apps/api/package.json
 COPY --from=build /workspace/apps/web/dist ./web
-COPY --from=build /workspace/apps/staff/dist ./staff
+COPY --from=build /workspace/apps/staff/dist ./web/staff
 
 COPY docker/nginx.conf.template /etc/nginx/templates/default.conf.template
 COPY docker/entrypoint.sh /usr/local/bin/ironcode-entrypoint

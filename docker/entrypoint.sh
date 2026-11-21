@@ -2,13 +2,13 @@
 set -Eeuo pipefail
 
 : "${CUSTOMER_HOST:=_}"
-: "${STAFF_HOST:=staff.example.com}"
 
 if (( $# > 0 )); then
   exec "$@"
 fi
 
-envsubst '${CUSTOMER_HOST} ${STAFF_HOST}' \
+export CUSTOMER_HOST
+envsubst '${CUSTOMER_HOST}' \
   < /etc/nginx/templates/default.conf.template \
   > /etc/nginx/conf.d/default.conf
 

@@ -16,12 +16,12 @@
 
 1. 创建一个保持私有的 R2 bucket，不启用公开开发 URL。
 2. 创建仅能操作该 bucket 的 S3 API Token，把账户 ID、Access Key、Secret 和 bucket 名填入服务器环境变量。
-3. 在 R2 bucket 的 CORS 设置中填写以下配置，并把示例域名替换成员工后台的实际域名：
+3. 在 R2 bucket 的 CORS 设置中允许站点的 HTTPS 来源。`AllowedOrigins` 填写域名和协议，省略 `/staff` 路径。本地开发时可保留 `http://localhost:5174`。
 
 ```json
 [
   {
-    "AllowedOrigins": ["https://staff.example.com", "http://localhost:5174"],
+    "AllowedOrigins": ["https://ironcode.cn", "http://localhost:5174"],
     "AllowedMethods": ["PUT"],
     "AllowedHeaders": ["Content-Type"],
     "ExposeHeaders": ["ETag"],
@@ -37,7 +37,16 @@
 
 ## 生产部署
 
-项目只保留生产环境 Compose 配置。复制 `.env.example` 为 `.env`，填写生产密钥、数据库密码、客户域名、员工后台域名和 `APP_ORIGINS`，然后执行：
+生产环境使用一个域名。客户访问 `https://ironcode.cn/`，员工访问 `https://ironcode.cn/staff`，浏览器会跳转到 `/staff/`。两个前端都通过同一域名下的 `/api/` 访问后端。
+
+首次部署时复制 `.env.example` 为 `.env` 并填写生产密钥和数据库密码。已有部署可直接更新 `.env` 中的域名配置，并移除旧的 `STAFF_HOST`。
+
+```dotenv
+CUSTOMER_HOST=ironcode.cn
+APP_ORIGINS=https://ironcode.cn
+```
+
+在外层 HTTPS 反向代理中，把 `ironcode.cn` 的全部路径转发到 `http://127.0.0.1:8080`，保留原请求路径和 `Host`。使用包含单域名配置的镜像更新服务。
 
 ```bash
 docker compose -f compose.yml pull
