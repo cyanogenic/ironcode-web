@@ -46,17 +46,18 @@ CUSTOMER_HOST=ironcode.cn
 APP_ORIGINS=https://ironcode.cn
 ```
 
-在外层 HTTPS 反向代理中，把 `ironcode.cn` 的全部路径转发到 `http://127.0.0.1:8080`，保留原请求路径和 `Host`。使用包含单域名配置的镜像更新服务。
+在外层 HTTPS 反向代理中，把 `ironcode.cn` 的全部路径转发到 `http://127.0.0.1:8080`，保留原请求路径和 `Host`。首次部署和升级都使用以下命令。升级前先备份 PostgreSQL。
 
 ```bash
-docker compose -f compose.yml pull
-docker compose -f compose.yml up -d
+docker compose up -d --pull always
 ```
 
-首次部署或数据库结构更新后，在应用镜像中执行迁移：
+Compose 会等 PostgreSQL 可以接收 TCP 连接，再用与应用相同的镜像启动 `migrate` 服务，执行 `prisma migrate deploy`。空库会应用全部迁移，已有库只应用待执行的迁移。`migrate` 以状态码 `0` 退出后，Compose 才会启动应用。
+
+如果迁移失败，Compose 会停止启动本次部署的应用。查看迁移日志和数据库的实际状态，修复失败的迁移后重新执行部署命令。回退应用镜像需要另行检查数据库结构与旧版本是否兼容。
 
 ```bash
-docker compose -f compose.yml run --rm app sh -c 'cd /opt/ironcode/apps/api && /opt/ironcode/node_modules/.bin/prisma migrate deploy'
+docker compose logs migrate
 ```
 
 GitHub Actions 会在 `main` 分支或版本标签推送后构建并发布 `ghcr.io/<owner>/ironcode-web` 镜像。应用容器内由 Nginx 提供客户网站和员工后台，并将 `/api` 反向代理到 NestJS API。

@@ -2,7 +2,7 @@ name: ironcode-production
 
 services:
   app:
-    image: ${IRONCODE_IMAGE:-ghcr.io/cyanogenic/ironcode-web:latest}
+    image: &ironcode-image ${IRONCODE_IMAGE:-ghcr.io/cyanogenic/ironcode-web:latest}
     restart: unless-stopped
     ports:
       - "127.0.0.1:8080:80"
@@ -11,9 +11,24 @@ services:
     environment:
       NODE_ENV: production
       API_PORT: 3000
-      DATABASE_URL: postgresql://ironcode:${POSTGRES_PASSWORD}@postgres:5432/ironcode?schema=public
+      DATABASE_URL: &database-url postgresql://ironcode:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/ironcode?schema=public
       APP_ORIGINS: ${APP_ORIGINS:?Set APP_ORIGINS in .env}
       CUSTOMER_HOST: ${CUSTOMER_HOST:?Set CUSTOMER_HOST in .env}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  migrate:
+    image: *ironcode-image
+    working_dir: /opt/ironcode/apps/api
+    command: ["./node_modules/.bin/prisma", "migrate", "deploy"]
+    restart: "no"
+    environment:
+      DATABASE_URL: *database-url
+    healthcheck:
+      disable: true
     depends_on:
       postgres:
         condition: service_healthy
@@ -28,7 +43,17 @@ services:
     volumes:
       - ironcode-postgres:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ironcode -d ironcode"]
+      test:
+        [
+          "CMD",
+          "pg_isready",
+          "-h",
+          "127.0.0.1",
+          "-U",
+          "ironcode",
+          "-d",
+          "ironcode",
+        ]
       interval: 5s
       timeout: 3s
       retries: 20
