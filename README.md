@@ -44,9 +44,15 @@
 ```dotenv
 CUSTOMER_HOST=ironcode.cn
 APP_ORIGINS=https://ironcode.cn
+HTTP_PORT=8080
+API_PORT=3000
 ```
 
-在外层 HTTPS 反向代理中，把 `ironcode.cn` 的全部路径转发到 `http://127.0.0.1:8080`，保留原请求路径和 `Host`。首次部署和升级都使用以下命令。升级前先备份 PostgreSQL。
+`HTTP_PORT` 是宿主机的 HTTP 监听端口。外层 HTTPS 反向代理应把 `ironcode.cn` 的全部路径转发到 `http://127.0.0.1:<HTTP_PORT>`，保留原请求路径和 `Host`。
+
+`API_PORT` 是 NestJS 在容器内的监听端口，容器内的 Nginx 会使用该端口代理 `/api/`。容器内的 `80` 端口由 Nginx 使用。本地执行 `pnpm dev` 时，两个前端也会使用项目根目录 `.env` 中的 `API_PORT` 代理 API。
+
+首次部署和升级都使用以下命令。升级前先备份 PostgreSQL。
 
 ```bash
 docker compose up -d --pull always

@@ -2,13 +2,14 @@
 set -Eeuo pipefail
 
 : "${CUSTOMER_HOST:=_}"
+: "${API_PORT:=3000}"
 
 if (( $# > 0 )); then
   exec "$@"
 fi
 
-export CUSTOMER_HOST
-envsubst '${CUSTOMER_HOST}' \
+export CUSTOMER_HOST API_PORT
+envsubst '${CUSTOMER_HOST} ${API_PORT}' \
   < /etc/nginx/templates/default.conf.template \
   > /etc/nginx/conf.d/default.conf
 
